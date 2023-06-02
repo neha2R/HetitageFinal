@@ -109,8 +109,9 @@ Route::get('exp', 'ExperinceController@exp');
 Route::post('create_duel', 'DuelController@create_duel');
 Route::post('duel_random_list', 'DuelController@create_duelrandom');
 Route::post('exit_duelrandom', 'DuelController@exit_duelrandom');
-Route::post('duelrandom_pair', 'DuelController@duelrandom_pair');
+Route::post('duelrandomplay', 'DuelController@duelrandomplay');
 Route::post('notify_sender', 'DuelController@notify_sender');
+Route::post('deletepair', 'DuelController@deletepair');
 
 Route::post('get_all_users', 'DuelController@get_all_users');
 Route::post('send_invitation', 'DuelController@send_invitation');
