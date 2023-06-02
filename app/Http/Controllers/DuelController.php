@@ -1,9 +1,7 @@
 <?php
 
 namespace App\Http\Controllers;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Log;
-use BeyondCode\LaravelWebSockets\Facades\WebSocketsRouter;
+
 use Illuminate\Http\Request;
 use App\Attempt;
 use App\Challange;
@@ -20,8 +18,12 @@ use App\FireBaseNotification;
 use App\QuizRule;
 use App\QuizTheme;
 use App\CheckUserState;
+use App\CheckUserOnline;
 use App\QuizSpeed;
 use App\Duel_entry_room;
+use Websocket\Client;
+use App\Pairinfo;
+use App\QuizQuestion;
 
 class DuelController extends Controller
 {
@@ -100,7 +102,7 @@ class DuelController extends Controller
 
         return response()->json(['status' => 200, 'message' => 'Dual Created', 'data' => $dual]);
     }
-     public function create_duelrandom(Request $request)
+     public function create_duelrandom11(Request $request)
     {
 
         $validator = Validator::make($request->all(), [
@@ -165,6 +167,290 @@ class DuelController extends Controller
 if($dualrandomquiz )
 {
         return response()->json(['status' => 200, 'message' => 'You entered in duel room & Duel Random List Available.', 'data' => $data]);
+}
+else
+{
+    return response()->json(['status' => 202, 'message' => 'You entered in duel room but No other user found in Duel Random List.', 'data' => array()]);
+ 
+}       
+    }
+    public function deletepair(Request $request)
+    {
+    $validator = Validator::make($request->all(), [
+            'pairid' => 'required',
+           
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['status' => 422, 'data' => array(), 'message' => $validator->errors()]);
+        }
+
+        $data = Pairinfo::find($request->pairid);
+
+            $data->is_paired='2';
+            $data->save();
+            if($data)
+            {
+                      return response()->json(['status' => 200, 'message' => 'Paired is deleted successfully.', 'data' => array()]);
+            }
+            else
+            {
+                                  return response()->json(['status' => 204, 'message' => 'Something Went Wrong.', 'data' => array()]);
+            }
+    
+    }
+  public function create_duelrandom(Request $request)
+    {
+
+        $validator = Validator::make($request->all(), [
+            'user_id' => 'required',
+           
+        ]);
+        $quiz_type = QuizType::where('name', 'like', '%Duel%')->where('no_of_player', 2)->latest()->first();
+        if ($validator->fails()) {
+            return response()->json(['status' => 422, 'data' => array(), 'message' => $validator->errors()]);
+        }
+ $isuser = Duel_entry_room::get();
+ foreach ($isuser as $isus)
+ {
+       if (Carbon::now()->parse($isus->updated_at)->diffInSeconds() >60) { 
+              $isus->is_online = '2';
+                    $isus->save();
+             }
+ }  
+            
+        $isuser = Duel_entry_room::where('user_id', $request->user_id)->first();
+         if(!$isuser)
+         {
+         
+            $data = new Duel_entry_room;
+            $data->user_id = $request->user_id;
+            $data->is_online='1';
+            $data->save();
+         }
+         else
+         {
+           $isuser->is_online = '1';
+                     $isuser->save();
+         }
+      
+      $isalreadypaired= Pairinfo::where('is_paired', '1')->where(function($query) use ($request) {
+			$query->where('user1', $request->user_id)
+						->orWhere('user2', $request->user_id);
+})->first();
+
+       if($isalreadypaired)
+       
+       {
+
+         if($isalreadypaired->user1==$request->user_id)
+          {
+             $user = User::where('id', $isalreadypaired->user2)->where('type', '2')->first();
+                $pairid=$isalreadypaired->id;
+                $duel_idd=$isalreadypaired->attemptid;
+
+          }
+          else if($isalreadypaired->user2==$request->user_id)
+          {
+             $user = User::where('id', $isalreadypaired->user1)->where('type', '2')->first();
+                $pairid=$isalreadypaired->id;
+                $duel_idd=$isalreadypaired->attemptid;
+          }
+       
+       }
+       else
+       {
+       $pariisdeleted=[];
+        $isuserPairdeletedfirst = Pairinfo::where('is_paired', '2')->get();
+        if($isuserPairdeletedfirst)
+       
+          {
+             foreach($isuserPairdeletedfirst as $isuserPairdelete)
+             {
+           if($isuserPairdelete->user1==$request->user_id)
+          {
+                  $pariisdeleted[]=$isuserPairdelete->user2;
+          
+          }
+          if($isuserPairdelete->user2==$request->user_id)
+          {
+                  $pariisdeleted[]=$isuserPairdelete->user1;
+          }
+          }
+          }
+
+$userlist='';
+        $dualrandomquiz = Duel_entry_room::where('user_id', "!=", $request->user_id)->whereNotIn('user_id', $pariisdeleted)->where('is_online', '1')->orderBy('id', 'DESC')->get();
+//dd($dualrandomquiz);
+         foreach ($dualrandomquiz as $dualrandome)
+         {
+         if (Carbon::now()->parse($dualrandome->updated_at)->diffInSeconds() <=60) { 
+                $userlist=$dualrandome->user_id;
+
+              }
+         }
+
+    if($userlist)
+    {
+
+        // $isuserPairdeleted = Pairinfo::where('is_paired', '2')->where(function($query) use ($userlist) {
+	//		$query->where('user1', $userlist)
+	//					->orWhere('user2', $userlist);
+//})->first();
+         
+      //     if($isuserPairdeleted)
+        //   {
+                   
+         //    if($isuserPairdeleted->user1==$request->user_id || $isuserPairdeleted->user2==$request->user_id)
+          //   {
+          //    dd('call8');
+         //  return response()->json(['status' => 202, 'message' => 'You entered in duel room1 but No other user found in Duel Random List.', 'data' => array()]);
+
+
+
+           //  }
+           
+           
+          // }
+         
+         $isuserPair = Pairinfo::where('is_paired', '1')->where(function($query) use ($userlist) {
+			$query->where('user1', $userlist)
+						->orWhere('user2', $userlist);
+})->first();
+
+if($isuserPair)
+{
+if($isuserPair->user1==$request->user_id || $isuserPair->user2==$request->user_id)
+{
+
+                $user = User::where('id', $userlist)->where('type', '2')->first();
+                $pairid=$isuserPair->id;
+                $duel_idd=$isuserPair->attemptid;
+
+}
+elseif($isuserPair->user1!=$request->user_id && $isuserPair->user2!=$request->user_id)
+ {
+
+          return response()->json(['status' => 204, 'message' => 'user is already paired.', 'data' => array()]);
+ }
+        // Create dual link
+
+}
+  else
+ {
+
+       $dataPairinfo = new Pairinfo;
+            $dataPairinfo->user1 = $request->user_id;
+            $dataPairinfo->user2 = $userlist;
+            $dataPairinfo->is_paired='1';
+            $dataPairinfo->save();
+            $pairid=$dataPairinfo->id;
+            
+            
+            if($pairid)
+         {
+         
+          $dataattempt = new Attempt;
+        $dataattempt->user_id = $request->user_id;
+        $dataattempt->quiz_type_id = $quiz_type->id;
+        $dataattempt->difficulty_level_id = 3;
+        $dataattempt->quiz_speed_id = 1;
+        $dataattempt->isdualrandom = '1';
+
+        $dataattempt->save();
+        
+         $data1 = new Attempt;
+        $data1->user_id = $userlist;
+        $data1->quiz_type_id = $quiz_type->id;
+        $data1->difficulty_level_id = 3;
+        $data1->quiz_speed_id = 1;
+        $data1->parent_id = $dataattempt->id;
+        $data1->isdualrandom = '1';
+
+        $data1->save();
+           
+    
+        $challange = new Challange;
+        $challange->to_user_id = $userlist;
+        $challange->from_user_id = $request->user_id;
+        $challange->attempt_id = $dataattempt->id;
+        $challange->status = '1';
+        $challange->is_duelrandom = '1';
+        $challange->save();
+
+        // Create dual link
+
+        $domain = new QuizDomain;
+        $domain->attempts_id = $dataattempt->id;
+        $domain->domain_id = implode(',', Domain::select('id')->pluck('id')->toArray());
+        $domain->save();
+
+        $quiztheme = new QuizTheme;
+        $quiztheme->quiz_id = $dataattempt->id;
+        $quiztheme->user_id = $request->user_id;
+        $quiztheme->theme_id = 1;
+        $quiztheme->save();
+         $pairedattempt=Pairinfo::where('id',$pairid)->first();
+         $pairedattempt->attemptid=$dataattempt->id;
+         $pairedattempt->save();
+         
+                         $duel_idd=$dataattempt->id;
+       // $dual = [];
+               // $quizQuestions = QuizQuestion::where('attempts_id', $data->id)->latest()->first();
+                //        if (empty($quizQuestions)) {
+                 //           return response()->json(['status' => 204, 'message' => 'Question not prepared yet.', 'data' => $dual]); 
+                 //       }
+
+         }
+            $user = User::where('id', $userlist)->where('type', '2')->first();
+ }   
+        }
+
+}
+                $data1 = [];
+
+            
+            
+  
+ 
+       
+    
+
+
+        // All user who accept invitation
+if(!empty($user))
+{
+            $age = Carbon::parse($user->dob)->age;
+            $data['id'] = $user->id;
+            $data['name'] = ucwords(strtolower($user->name));
+
+            if ($ageGroup = AgeGroup::where('from', '<=', $age)->where('to', '>=', $age)->first()) {
+                $data['age_group'] = ucwords(strtolower($ageGroup->name));
+            } else {
+                $data['age_group'] = "";
+            }
+            if ($user->country) {
+                $data['country'] = $user->country->country_name->name;
+                $data['flag_icon'] = url('/flags') . '/' . strtolower($user->country->country_name->sortname) . ".png";
+            } else {
+                $data['flag_icon'] = url('/flags/') . strtolower('in') . ".png";
+            }
+            $data['status'] = "Online";
+            if (isset($user->profile_image)) {
+                $data['image'] = url('/storage') . '/' . $user->profile_image;
+            } else {
+                $data['image'] = '';
+            }
+           $data['pairid'] = $pairid;
+           $data['duel_id'] = $duel_idd;
+        $data1[]=$data;
+ }       
+          
+        //  $dual['link']=Attempt::where('id',$data->id)->first()->link;
+     //   $duel['created_date'] = date('d-M-Y', strtotime($data->created_at));
+if(!empty($user))
+{
+        return response()->json(['status' => 200, 'message' => 'You entered in duel room & Duel Random List Available.', 'data' => $data1]);
 }
 else
 {
@@ -242,12 +528,11 @@ else
  
 }       
     }
-    public function duelrandom_pair(Request $request)
+    public function duelrandomplay(Request $request)
     {
 
         $validator = Validator::make($request->all(), [
-            'from_id' => 'required',
-            'to_id' => 'required',
+            'pairid' => 'required'
         ]);
         
         if ($validator->fails()) {
@@ -259,25 +544,28 @@ else
         if (empty($quiz_type)) {
             return response()->json(['status' => 204, 'message' => 'Dual type quiz not found', 'data' => array()]);
         }
+         $isuserPair = Pairinfo::where('id', $request->pairid)->first();
 
-$ispaired =Challange::where('is_duelrandom','1')->where(function($query) use ($request) {
-			$query->where('from_user_id', $request->from_id)
-						->orWhere('to_user_id', $request->to_id);
-})->first();
-         
+//$ispaired =Challange::where('is_duelrandom','1')->where(function($query) use ($isuserPair) {
+			//$query->where('from_user_id', $isuserPair->user)
+			//			->orWhere('to_user_id', $isuserPair->user2);
+//})->first();
+       //  $ispaired =Challange::where('is_duelrandom','1')->where('from_user_id', $isuserPair->user2)
+		//				->where('to_user_id', $isuserPair->user1)->first();
 
-             if($ispaired)
-             {
-             $iscompleted = Attempt::where('id', $ispaired->attempt_id)->where('status', 'completed')->first();
-              if(!$iscompleted)
-             {
-            return response()->json(['status' => 204, 'message' => 'user is already paired.', 'data' => array()]);
-             }
-             }
+          //   if($ispaired)
+           //  {
+            //         return response()->json(['status' => 200, 'message' => 'Pair successfully Generated', 'data' => $ispaired->attempt_id]);
+            //// $iscompleted = Attempt::where('id', $ispaired->attempt_id)->where('status', 'completed')->first();
+          //    if(!$iscompleted)
+           //  {
+           // return response()->json(['status' => 204, 'message' => 'Quiz is alreay running.', 'data' => array()]);
+            // }
+            // }
             
             
         $data = new Attempt;
-        $data->user_id = $request->from_id;
+        $data->user_id = $isuserPair->user1;
         $data->quiz_type_id = $quiz_type->id;
         $data->difficulty_level_id = 3;
         $data->quiz_speed_id = 1;
@@ -286,7 +574,7 @@ $ispaired =Challange::where('is_duelrandom','1')->where(function($query) use ($r
         $data->save();
         
          $data1 = new Attempt;
-        $data1->user_id = $request->to_id;
+        $data1->user_id = $isuserPair->user2;
         $data1->quiz_type_id = $quiz_type->id;
         $data1->difficulty_level_id = 3;
         $data1->quiz_speed_id = 1;
@@ -297,8 +585,8 @@ $ispaired =Challange::where('is_duelrandom','1')->where(function($query) use ($r
            
     
         $challange = new Challange;
-        $challange->to_user_id = $request->to_id;
-        $challange->from_user_id = $request->from_id;
+        $challange->to_user_id = $isuserPair->user2;
+        $challange->from_user_id = $isuserPair->user1;
         $challange->attempt_id = $data->id;
         $challange->status = '1';
         $challange->is_duelrandom = '1';
@@ -313,25 +601,29 @@ $ispaired =Challange::where('is_duelrandom','1')->where(function($query) use ($r
 
         $quiztheme = new QuizTheme;
         $quiztheme->quiz_id = $data->id;
-        $quiztheme->user_id = $request->from_id;
+        $quiztheme->user_id = $isuserPair->user1;
         $quiztheme->theme_id = 1;
         $quiztheme->save();
 
         $dual = [];
+               // $quizQuestions = QuizQuestion::where('attempts_id', $data->id)->latest()->first();
+                //        if (empty($quizQuestions)) {
+                 //           return response()->json(['status' => 204, 'message' => 'Question not prepared yet.', 'data' => $dual]); 
+                 //       }
         $dual['duel_id'] = $data->id;
-          $oldquizs = Duel_entry_room::where('user_id', $request->from_id)->first();
-           if($oldquizs)
-                     {
-                  $oldquizs->deleted_at = date('Y-m-d h:i:s');
-                     $oldquizs->save();
-                     }
+     //     $oldquizs = Duel_entry_room::where('user_id', $request->from_id)->first();
+        //   if($oldquizs)
+           //          {
+          //        $oldquizs->deleted_at = date('Y-m-d h:i:s');
+                //     $oldquizs->save();
+                //     }
                      
-            $oldquizs1 = Duel_entry_room::where('user_id', $request->to_id)->first();
-           if($oldquizs1)
-                     {
-                  $oldquizs1->deleted_at = date('Y-m-d h:i:s');
-                     $oldquizs1->save();
-                     }   
+         //   $oldquizs1 = Duel_entry_room::where('user_id', $request->to_id)->first();
+         //  if($oldquizs1)
+            //         {
+            //      $oldquizs1->deleted_at = date('Y-m-d h:i:s');
+             //        $oldquizs1->save();
+               //      }   
                      
                                
         //$dualrandomquiz = Attempt::where('id',  $request->duel_id)->first();
@@ -446,10 +738,22 @@ $ispaired =Challange::where('is_duelrandom','1')->where(function($query) use ($r
             } else {
                 $allUsers['flag_icon'] = url('/flags/') . strtolower('in') . ".png";
             }
+             $checkonlines = CheckUserOnline::where('user_id',$user->id)->first();
+             if($checkonlines)
+             {
+              if (Carbon::now()->parse($checkonlines->updated_at)->diffInSeconds() >45) { 
+                $checkonlines->is_online='2';
+                $checkonlines->save();
+              }
+             }
             if (checkUser($user->id)) {
                 $allUsers['status'] = "Busy";
-            } else {
+            } elseif (checkUserstatus($user->id)) {
                 $allUsers['status'] = "Online";
+            }
+            else
+            {
+               $allUsers['status'] = "Offline";
             }
 
             if (Challange::where('attempt_id', $req->dual_id)->where('to_user_id', $user->id)->whereDate('created_at', carbon::now())->first()) {
@@ -527,6 +831,8 @@ $ispaired =Challange::where('is_duelrandom','1')->where(function($query) use ($r
             $challange->status = '0';
             $challange->save();
 
+            //notification
+
             $attempt = Attempt::where('id', $challange->attempt_id)->first();
             $data = [
                 'title' => 'Invitation received.',
@@ -537,50 +843,109 @@ $ispaired =Challange::where('is_duelrandom','1')->where(function($query) use ($r
                 //   'from'=>$challange->from_user->name,
                 'message' => 'You have a new request from' . ' ' . $challange->from_user->name,
             ];
-           //  $chat= Challange::create(['to_user_id'=>$req->to_id,'from_user_id'=>$req->to_id,'attempt_id'=>$req->dual_id,'status'=>'0','is_duelrandom'=>'0']);
-             event(new \App\Events\RealTimeMessage($data));
+            sendNotification($data);
 
-
-            //notification
-
-            // $attempt = Attempt::where('id', $chat->attempt_id)->first();
-            // $data = [
-            //     'title' => 'Invitation received.',
-            //     'token' => $chat->to_user->token,
-            //     'link' => $attempt->link,
-            //     'type' => 'dual',
-            //     'is_ios' => $chat->to_user->is_ios,
-            //     //   'from'=>$challange->from_user->name,
-            //     'message' => 'You have a new request from' . ' ' . $chat->from_user->name,
-            // ];
-            // sendNotification($data);
-
-            // $savenoti = new FireBaseNotification;
-            // $savenoti->user_id = $challange->to_user->id;
-            // $savenoti->link = $attempt->link;
-            // $savenoti->type = 'dual';
-            // $savenoti->message = 'You have a new request from ' . ' ' . $challange->from_user->name;
-            // $savenoti->title = 'Dual invitation send.';
-            // $savenoti->status = '0';
-            // $savenoti->save();
+            $savenoti = new FireBaseNotification;
+            $savenoti->user_id = $challange->to_user->id;
+            $savenoti->link = $attempt->link;
+            $savenoti->type = 'dual';
+            $savenoti->message = 'You have a new request from ' . ' ' . $challange->from_user->name;
+            $savenoti->title = 'Dual invitation send.';
+            $savenoti->status = '0';
+            $savenoti->save();
 
             return response()->json(['status' => 200, 'message' => 'Invitation Sent Successfully.']);
         }
         // }
 
     }
+
     public function accept_invitation(Request $req)
     {
-        
-         $user = User::where('id','2')->first();
-           // event(new App\Events\RealTimeMessage('Hello World'));
-           $data="Hello World";
-           WebSocketsRouter::notification('\App\Notifications\RealTimeNotification')->listen(function($data,$notifiable,$notification){
-                Log::info('Received'.get_class($notification)) ;
-                Log::info('Received'.json_encode($data)) ;
-          });
-         //// $user->notify(new \App\Notifications\RealTimeNotification('Hello World','2'));
-    
+
+        $validator = Validator::make($req->all(), [
+            'user_id' => 'required',
+            'dual_link' => 'required',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['status' => 422, 'data' => '', 'message' => $validator->errors()]);
+        }
+
+
+        $attempt = Attempt::where('link', $req->dual_link)->first();
+        if (empty($attempt)) {
+            return response()->json(['status' => 204, 'message' => 'Sorry! Link has been expired. or not found']);
+        }
+        $challenge = Challange::where('attempt_id', $attempt->id)->where('to_user_id', $req->user_id)->latest()->first();
+        if (carbon::now()->parse($attempt->created_at)->diffInSeconds() > 180) {
+            return response()->json(['status' => 200, 'message' => 'Sorry! Invitation has been expired.']);
+        }
+        if (empty($challenge)) {
+            $challenge = new Challange;
+            $challenge->to_user_id = $req->user_id;
+            $challenge->from_user_id = $attempt->user_id;
+            $challenge->attempt_id = $attempt->id;
+            $challenge->status = '1';
+            $challenge->save();
+            // return response()->json(['status' => 204, 'message' => 'Invitation not send yet to user']);
+        }
+
+
+
+        if ($attempt->challange_id != "") {
+            return response()->json(['status' => 422, 'data' => '', 'message' => 'Someone has already accepted the request. try next time!']);
+        } else {
+            // update attempts table
+            $attempt->challange_id = $req->user_id;
+            $attempt->save();
+
+            $data = [
+                'title' => 'Duel invitation accepted.',
+                'token' => $challenge->from_user->token,
+                'link' => $attempt->link,
+                'type' => 'dual',
+                'message' => User::where('id', $challenge->to_user_id)->first()->name . " has accepted the request. You can start quiz now",
+            ];
+            sendNotification($data);
+            // Create new data for user who accepts the request
+
+            $acceptuser = new Attempt;
+            $acceptuser->user_id = $req->user_id;
+            $acceptuser->parent_id = $attempt->id;
+            $acceptuser->difficulty_level_id = $attempt->difficulty_level_id;
+            $acceptuser->quiz_type_id = $attempt->quiz_type_id;
+            $acceptuser->quiz_speed_id = $attempt->quiz_speed_id;
+            $acceptuser->started_at = date('Y-m-d H:i:s');
+            $acceptuser->save();
+
+            // Update challange table status to accepted
+            $challenge->status = '1';
+            $challenge->save();
+
+
+            // Save notification
+            $savenoti = new FireBaseNotification;
+            $savenoti->user_id = $challenge->from_user->id;
+            $savenoti->link = $attempt->link;
+            $savenoti->type = 'dual';
+            $savenoti->message = User::where('id', $req->user_id)->first()->name . " has accepted the request. You can start quiz now";
+            $savenoti->title = 'Duel invitation accepted.';
+            $savenoti->status = '0';
+            $savenoti->save();
+
+            // $response['quiz_id'] = $acceptuser->id;
+
+
+            $data = [
+                ['user_id' => $req->user_id, 'is_online'=> '3'],
+                ['user_id' => $attempt->user_id, 'is_online'=> '3']
+            ];
+              
+            CheckUserOnline::destroy($data);
+            CheckUserOnline::insert($data); // Eloquent approach
+            return response()->json(['status' => 200, 'data' => $acceptuser->id, 'message' => 'Invitation Successfully accepted.']);
+        }
     }
     public function generate_link(Request $req)
     {
@@ -665,6 +1030,14 @@ $ispaired =Challange::where('is_duelrandom','1')->where(function($query) use ($r
         if ($validator->fails()) {
             return response()->json(['status' => 422,  'message' => $validator->errors()]);
         }
+        
+           $relaseuser =CheckUserOnline::where('user_id', $request->user_id)->where('is_online', '3')->first();
+         if($relaseuser)
+         {
+           $relaseuser->is_online = '1';
+           $relaseuser->save();
+        }
+ 
         // $data = Attempt::where('id',$request->dual_id)->where('user_id',$request->user_id)->first();
         $data = Attempt::where('id', $request->dual_id)->first();
 
@@ -728,9 +1101,13 @@ $ispaired =Challange::where('is_duelrandom','1')->where(function($query) use ($r
                 $res[] = $response;
                 $res[] = $user;
             }
-
-            $relaseuser = CheckUserState::where('user_id', $request->user_id);
-            ($relaseuser) ? $relaseuser->delete() : '';
+           //  $data = Pairinfo::where('attemptid',$request->dual_id)->first();
+           //    if($data)
+            //   {
+          //  $data->is_paired='2';
+           // $data->save();
+             //   }
+           
 
             return response()->json(['status' => 200, 'user_data' => $user, 'result' => $res, 'message' => 'Dual data']);
         } else {

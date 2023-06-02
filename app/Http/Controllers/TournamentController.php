@@ -279,7 +279,6 @@ class TournamentController extends Controller
             return redirect()->back()->with(['error' => 'Something Went Wrong Try Again Later']);
         }
     }
-    //git remote set-url origin https://github.com/myName/GitTest.git
 
     /**
      * Show the form for editing the specified resource.

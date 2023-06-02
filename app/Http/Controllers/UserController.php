@@ -9,7 +9,7 @@ use App\ForgetPasswords;
 use App\Mail\ForgetPassword;
 use App\AgeGroup;
 use App\CheckUserState;
-
+use App\CheckUserOnline;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Validator;
@@ -48,8 +48,8 @@ class UserController extends Controller
                 if (empty($user)) {
                     $user = new User;
                     $user->name = '';
-                    $user->email = $request->email; 
-                    // $userdata ->password = $user->password;
+                    $user->email = $request->email;
+                    // $userdata->password = $user->password;
                     // $userdata->username = $user->username;
                     $user->is_social = '1';
                     $user->email_verified_at = date('Y-m-d H:i:s');
@@ -249,7 +249,14 @@ class UserController extends Controller
 
 
         $age = carbon::now()->parse($user->dob)->age;
+          if($age<5)
+          {
 
+                 return response()->json([
+            'status' => 204, 
+            'message' => 'Minimum Age should be 5 to play'
+        ]);
+          }
         if ($group = AgeGroup::where('from', '<=', $age)->where('to', '>=', $age)->first()) {
             $group = $group->name;
         } else {
@@ -403,7 +410,13 @@ class UserController extends Controller
 
 
         $age = carbon::now()->parse($user->dob)->age;
-
+        if($age<5)
+          {
+  return response()->json([
+            'status' => 204, 
+            'message' => 'Minimum Age should be 5 to play'
+        ]);
+          }
         if ($group = AgeGroup::where('from', '<=', $age)->where('to', '>=', $age)->first()) {
             $group = $group->name;
         } else {
@@ -418,7 +431,17 @@ class UserController extends Controller
         return response()->json(['status' => 200, 'message' => 'Domain data', 'data' => $user, 'age_group' => $group, 'country' => $country_name, 'flag' => $country_flag]);
     }
 
-
+  public function checknoti()
+    {
+    $data = [
+                'title' => 'Tournament Reminder.',
+                'token' => User::where('id', '200')->first()->token,
+                'type' => 'noti',
+                'link' => '',
+                'message' => 'Your tournament is about to start',
+            ];
+            sendNotification($data);
+    }
     public function change_password(Request $req)
     {
         $validator = Validator::make($req->all(), [
@@ -597,30 +620,21 @@ class UserController extends Controller
         if ($validator->fails()) {
             return response()->json(['status' => 422, 'data' => '', 'message' => $validator->errors()]);
         }
-        $savedata = new CheckUserState;
+       $relaseuser =CheckUserOnline::where('user_id', $request->user_id)->first();
+         if($relaseuser)
+         {
+         $savedata->is_online = '3';
+         }
+         else
+         {
+        $savedata = new CheckUserOnline;
         $savedata->user_id = $request->user_id;
+         $savedata->is_online = '3';
+         }
         $savedata->save();
         return response()->json(['status' => 200, 'data' => '', 'message' => 'User is busy']);
     }
-    public function setpassword1(Request $req)
-    {
-        // $id=\Crypt::Decrypt($id);
-        
-$id=$req->id;
-        $user = User::where('id',$req->id)->first();
-       // dd($user);
-        // $user = User::where('id','1');
-   event(new \App\Events\RealTimeMessage('Hello World',$req->id));
-    //  $user->notify(new \App\Notifications\RealTimeNotification('Hello World',$req->id));
-     // return view('welcome', compact('id'));
-    //  return redirect()->route('welcome', compact('id'));
-    ////  return redirect()->back()->with(['welcome' => $id]);
-    // Echo.private('events.1')
-    // .listen('RealTimeMessage', (e) => console.log('RealTimeMessage: ' + e.message));    @endif 
-    //   return ["echo-private:events.{$req->id}.listen('RealTimeMessage', (e) => console.log('RealTimeMessage: ' + e.message))"];
 
-
-    }
     /** 
      * Delete a user from friend List // Free user
      *
@@ -636,10 +650,11 @@ $id=$req->id;
         if ($validator->fails()) {
             return response()->json(['status' => 422, 'data' => '', 'message' => $validator->errors()]);
         }
-        $data = CheckUserState::where('user_id', $request->user_id)->get();
-
-        if ($data->count() > 0) {
-            $data->each->delete();
+                 $relaseuser =CheckUserOnline::where('user_id', $request->user_id)->where('is_online', '3')->first();
+         if($relaseuser)
+         {
+           $relaseuser->is_online = '1';
+           $relaseuser->save();
         }
 
         return response()->json(['status' => 200, 'data' => '', 'message' => 'User is free']);
@@ -656,6 +671,10 @@ $id=$req->id;
             return response()->json(['status' => 422, 'data' => '', 'message' => $validator->errors()]);
         }
         $user = User::find($request->user_id);
+        if($request->token=='')
+        {
+         return response()->json(['status' => 202, 'data' => [], 'message' => 'Device token is empty..']);
+        }
         $user->token = $request->token;
         $user->device_id = $request->device_type;
         $user->save();
