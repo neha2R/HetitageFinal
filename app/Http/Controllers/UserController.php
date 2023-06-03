@@ -247,7 +247,7 @@ class UserController extends Controller
 
         // $user = $user->toArray();
 
-
+        //dd($age);
         $age = carbon::now()->parse($user->dob)->age;
           if($age<5)
           {
@@ -256,6 +256,7 @@ class UserController extends Controller
             'status' => 204, 
             'message' => 'Minimum Age should be 5 to play'
         ]);
+
           }
         if ($group = AgeGroup::where('from', '<=', $age)->where('to', '>=', $age)->first()) {
             $group = $group->name;

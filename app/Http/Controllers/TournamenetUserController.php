@@ -167,13 +167,13 @@ class TournamenetUserController extends Controller
         $singleuser = TournamenetUser::where('tournament_id', $request->tournament_id)->where('session_id', $request->session_id)->where('user_id', $request->user_id)->orderBy('marks', 'DESC')->where('status', 'completed')->whereDate('created_at', Carbon::today())->first();
 
         if (empty($singleuser)) {
-            return response()->json(['status' => 204, 'message' => 'No tournament found', 'data' => $response,]);
+            return response()->json(['status' => 204, 'message' => 'No tournament found', 'data' => $response]);
         }
 
         if ($singleuser->rank == null) {
             $job = (new XpLpOfTournament($request->all()))->delay(now()->addMinutes(1));
             $this->dispatch($job);
-            return response()->json(['status' => 200, 'message' => 'Rank will be not calculated yet', 'data' => '', 'result' => '0']);
+            return response()->json(['status' => 204, 'message' => 'Rank will be not calculated yet', 'data' => '', 'result' => '0']);
         } 
         else {
             $user = [];
@@ -206,6 +206,38 @@ class TournamenetUserController extends Controller
         }
     }
 
+  public function results(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'user_id' => 'required',
+           
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['status' => 201, 'data' => '', 'message' => $validator->errors()]);
+        }
+              $response = [];
+                $user = TournamenetUser::where('user_id', $request->user_id)->orderBy('id','DESC')->first();
+                if( $user)
+                {
+                        $tournament = Tournament::select('title')->where('id', $user->tournament_id)->first();
+                         $response['id'] = $user->tournament_id;
+                         $response['name'] = $tournament->title;
+                          $response['session_id'] = $user->session_id;
+                return response()->json(['status' => 200, 'message' => 'Results ', 'Tournament' => $response, 'Quiz Room' => $response]);
+                }
+                else
+                {
+                return response()->json(['status' => 202, 'message' => 'Results Not Found.', 'data' => []]);
+                }
+           
+         
+  
+        
+
+
+
+    }
 
 
     /**
@@ -411,7 +443,7 @@ class TournamenetUserController extends Controller
         } else {
             $your_leage['league_id'] = $userleague->league_id;
             $your_leage['league_name'] = League::find($userleague->league_id)->title;
-            $alluserleague = UserLeagueWithPer::where('league_id', $userleague->league_id)->orderBy('percentage', 'DESC')->take(5)->get();
+            $alluserleague = UserLeagueWithPer::where('league_id', $userleague->league_id)->orderBy('percentage', 'DESC')->get();
         }
 
 
@@ -426,10 +458,6 @@ class TournamenetUserController extends Controller
                 $user_league[] = $user_league1;
                 $rank++;
                 if ($alluser->user_id == $request->user_id) {
-                    $your_leage['rank'] = $rank;
-                    $your_leage['percentage'] = $alluser->percentage;
-                    $your_leage['user_id'] = $alluser->user_id;
-    
                     break;
                 }
             }
