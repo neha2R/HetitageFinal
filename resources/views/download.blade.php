@@ -45,7 +45,7 @@
                 <div>
                     <h5 class="">Click here to Download Application</h5>
                 </div>
-                <div class="p-1"><a href="#"><img src="{{ asset('/assets/images/apple_store.png')}}" class="img-fluid  "></a></div>
+                <div class="p-1"><a href="#"><a href="https://apps.apple.com/in/app/cultre-app/id1637382084"><img src="{{ asset('/assets/images/apple_store.png')}}" class="img-fluid  "></a></div>
                 <div class="p-1"><a href="https://play.google.com/store/apps/details?id=com.heritageolympiad.quiz"><img src="{{ asset('/assets/images/google-play.png')}}" class="img-fluid "></a></div>
             </div>
         </div>
